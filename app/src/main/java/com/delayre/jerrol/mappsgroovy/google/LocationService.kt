@@ -1,5 +1,6 @@
 package com.delayre.jerrol.mappsgroovy.google
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
@@ -138,28 +139,29 @@ class LocationService(private val activity: AppCompatActivity) {
 
         // Update the value of mRequestingLocationUpdates from the Bundle, and make sure that
         // the Start Updates and Stop Updates buttons are correctly enabled or disabled.
-        if (savedInstanceState.keySet().contains(KEY_REQUESTING_LOCATION_UPDATES)) {
-            mRequestingLocationUpdates = savedInstanceState.getBoolean(KEY_REQUESTING_LOCATION_UPDATES)
-        }
-
         KEY_REQUESTING_LOCATION_UPDATES.let {
             if (savedInstanceState.keySet().contains(it)) {
-                mRequestingLocationUpdates = savedInstanceState.getBoolean(KEY_REQUESTING_LOCATION_UPDATES)
+                mRequestingLocationUpdates = savedInstanceState.getBoolean(it)
             }
         }
 
         // Update the value of mCurrentLocation from the Bundle and update the UI to show the
         // corrent latitude and longitude.
-        if (savedInstanceState.keySet().contains(KEY_LOCATION)) {
-            // Since KEY_LOCATION was found in the Bundle, we can be sure that mCurrentLocation
-            // is not null.
-            mCurrentLocation = savedInstanceState.getParcelable(KEY_LOCATION)
+        KEY_LOCATION.let {
+            if (savedInstanceState.keySet().contains(it)) {
+                // Since KEY_LOCATION was found in the Bundle, we can be sure that mCurrentLocation
+                // is not null.
+                mCurrentLocation = savedInstanceState.getParcelable(it)
+            }
         }
 
         // Update the value of mLastUpdateTime from the Bundle and update the UI.
-        if (savedInstanceState.keySet().contains(KEY_LAST_UPDATED_TIME_STRING)) {
-            mLastUpdateTime = savedInstanceState.getString(KEY_LAST_UPDATED_TIME_STRING)
+        KEY_LAST_UPDATED_TIME_STRING.let {
+            if (savedInstanceState.keySet().contains(it)) {
+                mLastUpdateTime = savedInstanceState.getString(it)
+            }
         }
+
         updateLocationData()
     }
 
@@ -177,18 +179,18 @@ class LocationService(private val activity: AppCompatActivity) {
      * updates.
      */
     private fun createLocationRequest() {
-        val locationRequest = LocationRequest.create()
+        val locationRequest = LocationRequest.create().apply {
+            // Sets the desired interval for active location updates. This interval is
+            // inexact. You may not receive updates at all if no location sources are available, or
+            // you may receive them slower than requested. You may also receive updates faster than
+            // requested if other applications are requesting location at a faster interval.
+            interval = UPDATE_INTERVAL_IN_MILLISECONDS
 
-        // Sets the desired interval for active location updates. This interval is
-        // inexact. You may not receive updates at all if no location sources are available, or
-        // you may receive them slower than requested. You may also receive updates faster than
-        // requested if other applications are requesting location at a faster interval.
-        locationRequest.interval = UPDATE_INTERVAL_IN_MILLISECONDS
-
-        // Sets the fastest rate for active location updates. This interval is exact, and your
-        // application will never receive updates faster than this value.
-        locationRequest.fastestInterval = FASTEST_UPDATE_INTERVAL_IN_MILLISECODS
-        locationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+            // Sets the fastest rate for active location updates. This interval is exact, and your
+            // application will never receive updates faster than this value.
+            fastestInterval = FASTEST_UPDATE_INTERVAL_IN_MILLISECODS
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        }
 
         mLocationRequest = locationRequest
     }
@@ -312,10 +314,13 @@ class LocationService(private val activity: AppCompatActivity) {
     }
 
     fun onSaveInstanceState(outState: Bundle?) {
-        outState?.putBoolean(KEY_REQUESTING_LOCATION_UPDATES,
-                mRequestingLocationUpdates)
-        outState?.putParcelable(KEY_LOCATION, mCurrentLocation)
-        outState?.putString(KEY_LAST_UPDATED_TIME_STRING, mLastUpdateTime)
+        outState ?: return
+
+        with(outState) {
+            putBoolean(KEY_REQUESTING_LOCATION_UPDATES, mRequestingLocationUpdates)
+            putParcelable(KEY_LOCATION, mCurrentLocation)
+            putString(KEY_LAST_UPDATED_TIME_STRING, mLastUpdateTime)
+        }
     }
 
     private fun showSnackbar(mainTextStringId: Int, actionStringId: Int, onClickListener: View.OnClickListener) {
@@ -331,7 +336,7 @@ class LocationService(private val activity: AppCompatActivity) {
      */
     private fun checkPermission(): Boolean {
         val permissionState = ActivityCompat.checkSelfPermission(activity,
-                android.Manifest.permission.ACCESS_FINE_LOCATION)
+                Manifest.permission.ACCESS_FINE_LOCATION)
 
         return permissionState == PackageManager.PERMISSION_GRANTED
     }
@@ -339,7 +344,7 @@ class LocationService(private val activity: AppCompatActivity) {
     private fun requestPermissions() {
         val shouldProvideRationale =
                 ActivityCompat.shouldShowRequestPermissionRationale(activity,
-                        android.Manifest.permission.ACCESS_FINE_LOCATION)
+                        Manifest.permission.ACCESS_FINE_LOCATION)
 
         // Provide an additional rationale to the user. This would happen if the user denied
         // the request previously, but didn't check the "Don't ask again" checkbox.
@@ -348,7 +353,7 @@ class LocationService(private val activity: AppCompatActivity) {
             showSnackbar(R.string.permission_rationale,
                     android.R.string.ok, View.OnClickListener {
                 ActivityCompat.requestPermissions(activity,
-                        arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION),
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
                         REQUEST_PERMISSION_REQUEST_CODE)
             })
         } else {
@@ -357,24 +362,27 @@ class LocationService(private val activity: AppCompatActivity) {
             // sets the permission in a given state or the user denied the permission
             // previously and checked "Never ask again".
             ActivityCompat.requestPermissions(activity,
-                    arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION),
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
                     REQUEST_PERMISSION_REQUEST_CODE)
         }
     }
 
     fun onRequestPermissionsResult(requestCode: Int, grantResults: IntArray) {
         Logs.i(TAG, "onRequestPermissionsResult")
-        if (requestCode == REQUEST_PERMISSION_REQUEST_CODE) {
-            if (grantResults.isEmpty()) {
+
+        if (requestCode != REQUEST_PERMISSION_REQUEST_CODE) return
+
+        when {
+            grantResults.isEmpty() ->
                 // If user interaction was interrupted, the permission request is cancelled
                 // and you receive empty arrays.
                 Logs.i(TAG, "User interaction was cancelled.")
-            } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            grantResults[0] == PackageManager.PERMISSION_GRANTED ->
                 if (mRequestingLocationUpdates) {
                     Log.i(TAG, "Permission granted, updates requested, starting location updates.")
                     startLocationUpdates()
                 }
-            } else {
+            else ->
                 // Permission denied.
 
                 // Notify the user via a SnackBar that they have rejected a core permission for the
@@ -389,15 +397,13 @@ class LocationService(private val activity: AppCompatActivity) {
                 showSnackbar(R.string.permission_denied_explanation,
                         R.string.settings, View.OnClickListener {
                     // Build intent that displays the App settings screen
-                    val intent = Intent()
-                    intent.action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                    val uri = Uri.fromParts("package",
-                            BuildConfig.APPLICATION_ID, null)
-                    intent.data = uri
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    val intent = Intent().apply {
+                        action = Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                        data = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
                     activity.startActivity(intent)
                 })
-            }
         }
     }
 }
